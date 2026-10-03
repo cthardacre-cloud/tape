@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Tape — when to buy and where to set it</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,560;0,9..144,640;1,9..144,560&family=IBM+Plex+Mono:wght@500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <p class="eyebrow">Live market photo</p>
+      <h1>Tape</h1>
+    </div>
+    <p class="lede">Take a photo of the market. Tape tells you when to buy or sell, and the prices to set.</p>
+  </header>
+
+  <main class="desk">
+    <section class="stage" aria-label="Photo">
+      <div class="view is-empty" id="view">
+        <div class="ghost" id="ghost" aria-hidden="true">
+          <span>1.0940</span>
+          <span>1.0910</span>
+          <span>1.0864</span>
+          <span>1.0830</span>
+        </div>
+        <p class="frame-hint" id="frameHint">Include the price scale if you can see one. You can also drop a photo here.</p>
+        <video id="video" playsinline autoplay muted hidden></video>
+        <canvas id="board" hidden></canvas>
+        <button type="button" class="shutter" id="shutter" hidden aria-label="Snap photo"><span></span></button>
+        <div class="drop-veil" id="dropVeil" hidden>
+          <p>Drop the photo</p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <label class="btn">
+          Take a photo
+          <input id="cameraFile" type="file" accept="image/*" capture="environment" hidden>
+        </label>
+        <label class="btn">
+          Upload a screenshot
+          <input id="upload" type="file" accept="image/*" hidden>
+        </label>
+        <button type="button" class="btn" id="live">Use camera</button>
+        <button type="button" class="btn" id="preview">Preview a read</button>
+      </div>
+
+      <form class="context" id="context">
+        <label>
+          Symbol, if you know it
+          <input id="symbol" name="symbol" maxlength="40" placeholder="AAPL, BTC, EURUSD" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="grow">
+          Note
+          <input id="note" name="note" maxlength="240" placeholder="I'm flat, or I'm already long" autocomplete="off">
+        </label>
+        <fieldset class="horizon">
+          <legend>How long this idea should last</legend>
+          <label><input type="radio" name="horizon" value="minutes"> Minutes</label>
+          <label><input type="radio" name="horizon" value="today" checked> Today</label>
+          <label><input type="radio" name="horizon" value="week"> This week</label>
+        </fieldset>
+        <p class="horizon-line" id="horizonLine"></p>
+      </form>
+
+      <div class="read-row">
+        <button type="button" class="primary" id="read" disabled>Read this photo</button>
+        <button type="button" class="btn" id="retake" hidden>Clear photo</button>
+      </div>
+      <p class="status" id="status" role="status"></p>
+      <p class="error" id="error" hidden></p>
+
+      <form id="keyForm" class="key" hidden>
+        <div class="key-copy">
+          <p class="key-title">A SpaceXAI key reads the photo</p>
+          <p>The key stays in this browser on this PC. It is not saved inside the Tape file. Tape sends the photo to SpaceXAI only when you press Read.</p>
+        </div>
+        <div class="key-row">
+          <label class="sr" for="key">SpaceXAI key</label>
+          <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a key from console.x.ai">
+          <button type="submit" class="primary">Save key</button>
+        </div>
+        <p class="key-links">
+          <a href="https://console.x.ai" target="_blank" rel="noreferrer">Get a key</a>
+          <button type="button" class="text" id="forget" hidden>Forget key</button>
+        </p>
+      </form>
+    </section>
+
+    <section class="call" id="call" aria-live="polite">
+      <div id="empty">
+        <p class="eyebrow">The call</p>
+        <h2>Where to set the order</h2>
+        <p class="empty-lead">Point the camera at a chart, a broker screen, or a board with prices. Tape reads only what is on the photo.</p>
+        <ol class="steps">
+          <li>Get the price scale in the frame when there is one.</li>
+          <li>Read the photo. A real read needs a SpaceXAI key.</li>
+          <li>Set the buy and the sell on the tickets. If the call is Wait, place nothing.</li>
+        </ol>
+      </div>
+
+      <div id="result" hidden>
+        <p class="flag" id="flag" hidden></p>
+        <div class="result-top">
+          <p class="kicker" id="kicker"></p>
+          <p class="clarity" id="clarity"></p>
+        </div>
+        <h2 class="bias" id="bias"></h2>
+        <p class="headline" id="headline"></p>
+        <div class="tickets">
+          <article class="ticket" id="buyTicket" data-kind="buy">
+            <span>Set buy</span>
+            <button type="button" class="price" id="buyPrice"></button>
+            <em id="buyOrder"></em>
+            <p id="buyWhy"></p>
+          </article>
+          <article class="ticket" id="sellTicket" data-kind="sell">
+            <span>Set sell</span>
+            <button type="button" class="price" id="sellPrice"></button>
+            <em id="sellOrder"></em>
+            <p id="sellWhy"></p>
+          </article>
+          <article class="ticket" id="stopTicket" data-kind="stop">
+            <span>Get out</span>
+            <button type="button" class="price" id="stopPrice"></button>
+            <em id="stopOrder"></em>
+            <p id="stopWhy"></p>
+          </article>
+        </div>
+        <p class="copy-hint">Click a price to copy it. Point at a ticket to light that line on the photo.</p>
+        <p class="timing" id="timing"></p>
+        <h3>When</h3>
+        <p class="when" id="when"></p>
+        <h3 id="invalidLabel">The idea is wrong if</h3>
+        <p class="invalid" id="invalid"></p>
+        <h3 id="seenLabel">On the photo</h3>
+        <ul id="seen"></ul>
+        <h3 id="riskLabel">Ways this can be wrong</h3>
+        <ul id="risks"></ul>
+        <div class="result-foot">
+          <p class="by" id="by"></p>
+          <button type="button" class="text" id="saveFile">Save as file</button>
+          <button type="button" class="text" id="toggleLines" hidden>Hide lines</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>A read of a picture. Prices move, and you can lose money. This is not financial advice.</p>
+  </footer>
+  <p class="toast" id="toast" role="status" hidden></p>
+  <script src="/app.js"></script>
+</body>
+</html>

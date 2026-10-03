@@ -1,0 +1,156 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "readable",
+    "instrument",
+    "timeframe",
+    "bias",
+    "timing",
+    "confidence",
+    "headline",
+    "when_to_act",
+    "last_price",
+    "buy",
+    "sell",
+    "stop",
+    "invalid_if",
+    "what_i_see",
+    "risks",
+    "chart_levels"
+  ],
+  "properties": {
+    "readable": {
+      "type": "boolean",
+      "description": "True only when the photo shows a market and at least one price or a clear chart scale."
+    },
+    "instrument": {
+      "type": "string",
+      "description": "Symbol or market name printed in the photo. Empty string if none is printed."
+    },
+    "timeframe": {
+      "type": "string",
+      "description": "Chart timeframe printed in the photo, such as 15m or 1D. Empty string if none is printed."
+    },
+    "bias": {
+      "type": "string",
+      "enum": ["buy", "sell", "wait"],
+      "description": "buy means set a long. sell means set a short or exit. wait means place no new order."
+    },
+    "timing": {
+      "type": "string",
+      "enum": ["now", "wait_for_price", "after_close", "stay_out"],
+      "description": "now: market order. wait_for_price: resting limit. after_close: wait for the bar to close. stay_out: place nothing."
+    },
+    "confidence": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "How legible the photo is, not a chance of profit. Blurry or cropped photos stay at 40 or below."
+    },
+    "headline": {
+      "type": "string",
+      "description": "One sentence under 18 words. No exclamation marks and no profit promises."
+    },
+    "when_to_act": {
+      "type": "string",
+      "description": "One or two plain sentences naming the prices and what to do if price never gets there."
+    },
+    "last_price": {
+      "type": "string",
+      "description": "Last traded price printed in the photo. Empty string if you cannot read it."
+    },
+    "buy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price", "order", "why"],
+      "properties": {
+        "price": {
+          "type": "string",
+          "description": "Price to set the buy. Empty string if there is no buy."
+        },
+        "order": {
+          "type": "string",
+          "enum": ["market", "limit", "stop", "none"]
+        },
+        "why": {
+          "type": "string",
+          "description": "One short sentence on why this buy price. Empty string if there is no buy."
+        }
+      }
+    },
+    "sell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price", "order", "why"],
+      "properties": {
+        "price": {
+          "type": "string",
+          "description": "Price to set the sell. Empty string if there is no sell."
+        },
+        "order": {
+          "type": "string",
+          "enum": ["market", "limit", "stop", "none"]
+        },
+        "why": {
+          "type": "string",
+          "description": "One short sentence on why this sell price. Empty string if there is no sell."
+        }
+      }
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price", "why"],
+      "properties": {
+        "price": {
+          "type": "string",
+          "description": "Price where the idea is wrong and the position should be closed. Empty string if none."
+        },
+        "why": {
+          "type": "string",
+          "description": "One short sentence. Empty string if there is no stop."
+        }
+      }
+    },
+    "invalid_if": {
+      "type": "string",
+      "description": "What price action cancels the idea."
+    },
+    "what_i_see": {
+      "type": "array",
+      "maxItems": 4,
+      "items": { "type": "string" },
+      "description": "Up to 4 short facts visible in the photo."
+    },
+    "risks": {
+      "type": "array",
+      "maxItems": 3,
+      "items": { "type": "string" },
+      "description": "Up to 3 concrete ways this read can be wrong."
+    },
+    "chart_levels": {
+      "type": "array",
+      "maxItems": 4,
+      "description": "Lines to draw on the photo. Skip a level if you cannot place it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "price", "y_percent"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["buy", "sell", "stop", "price"]
+          },
+          "price": { "type": "string" },
+          "y_percent": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Vertical position in the full photo. 0 is the top edge. 100 is the bottom edge."
+          }
+        }
+      }
+    }
+  }
+}
