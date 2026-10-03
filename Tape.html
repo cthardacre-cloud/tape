@@ -779,7 +779,7 @@ footer {
         <p class="empty-lead">Point the camera at a chart, a broker screen, or a board with prices. Tape reads only what is on the photo.</p>
         <ol class="steps">
           <li>Get the price scale in the frame when there is one.</li>
-          <li>Read the photo. A real read needs a Gemini key.</li>
+          <li>Read the photo.</li>
           <li>Set the buy and the sell on the tickets. If the call is Wait, place nothing.</li>
         </ol>
       </div>
@@ -1264,7 +1264,8 @@ function clearPhoto() {
 }
 
 const KEY_NAME = "tape.geminiKey";
-const MODEL = "gemini-3.8-flash";
+const MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite"];
+const MODEL = MODELS[0];
 const KEY_COPY = "The key stays in this browser on this PC. It is not saved inside the Tape file. Tape sends the photo to Gemini only when you press Read.";
 
 const PROMPT = [
@@ -1436,28 +1437,55 @@ function normalizeRead(raw) {
   };
 }
 
-async function callModel(key, image, text) {
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent";
+function isHosted() {
+  return location.protocol === "https:" || location.protocol === "http:";
+}
+
+async function callHosted(image, text) {
+  let res;
+  try {
+    res = await fetch("/api/read", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: image, text: text })
+    });
+  } catch (err) {
+    throw new Error("Tape could not reach Gemini. Check the connection and try again.");
+  }
+  const body = await res.text();
+  let data = {};
+  try { data = JSON.parse(body); } catch (err) { data = {}; }
+  if (!res.ok) throw new Error(data.error || "Gemini could not read that photo.");
+  return data;
+}
+
+async function callGemini(key, image, text) {
   let last = null;
-  for (const withSchema of [true, false]) {
-    let res;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify(requestBody(image, text, withSchema))
-      });
-    } catch (err) {
-      throw new Error("Tape could not reach Gemini. Check the connection and try again.");
+  for (let modelIndex = 0; modelIndex < MODELS.length; modelIndex++) {
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[modelIndex] + ":generateContent";
+    for (const withSchema of [true, false]) {
+      let res;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          body: JSON.stringify(requestBody(image, text, withSchema))
+        });
+      } catch (err) {
+        throw new Error("Tape could not reach Gemini. Check the connection and try again.");
+      }
+      const body = await res.text();
+      if (res.ok) return JSON.parse(body);
+      last = { status: res.status, body: body };
+      if (/API key not valid|API_KEY_INVALID|invalid api key/i.test(body)) {
+        throw new Error("That key was refused. Check it at aistudio.google.com/apikey.");
+      }
+      if (res.status === 429 || res.status === 503) break;
+      if (res.status !== 400) break;
     }
-    const body = await res.text();
-    if (res.ok) return JSON.parse(body);
-    last = { status: res.status, body: body };
-    if (/API key not valid|API_KEY_INVALID|invalid api key/i.test(body)) {
-      throw new Error("That key was refused. Check it at aistudio.google.com/apikey.");
-    }
-    if (res.status === 429) throw new Error("Gemini is busy. Wait a moment and read the photo again.");
-    if (res.status !== 400) break;
+  }
+  if (last && (last.status === 429 || last.status === 503)) {
+    throw new Error("Gemini is busy. Wait a moment and read the photo again.");
   }
   let hint = "";
   if (last && last.body) {
@@ -1469,6 +1497,11 @@ async function callModel(key, image, text) {
     }
   }
   throw new Error(("Gemini could not read that photo. " + String(hint)).slice(0, 240));
+}
+
+async function callModel(key, image, text) {
+  if (isHosted()) return callHosted(image, text);
+  return callGemini(key, image, text);
 }
 
 function formatRead(read) {
@@ -1534,6 +1567,12 @@ function applyKeyState() {
 }
 
 function refreshStatus() {
+  if (isHosted()) {
+    state.configured = true;
+    state.statusReady = true;
+    $("keyForm").hidden = true;
+    return;
+  }
   state.configured = Boolean(storedKey());
   state.statusReady = true;
   applyKeyState();
@@ -1547,7 +1586,7 @@ function showKeyForm() {
 
 async function readPhoto() {
   if (!state.jpeg || state.busy) return;
-  if (state.statusReady && !state.configured) {
+  if (!isHosted() && state.statusReady && !state.configured) {
     showKeyForm();
     showError("Add a Gemini key first. Tape sends the photo to Gemini to read it.");
     return;
