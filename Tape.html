@@ -757,16 +757,16 @@ footer {
 
       <form id="keyForm" class="key" hidden>
         <div class="key-copy">
-          <p class="key-title">A SpaceXAI key reads the photo</p>
-          <p>The key stays in this browser on this PC. It is not saved inside the Tape file. Tape sends the photo to SpaceXAI only when you press Read.</p>
+          <p class="key-title">A Gemini key reads the photo</p>
+          <p>The key stays in this browser on this PC. It is not saved inside the Tape file. Tape sends the photo to Gemini only when you press Read.</p>
         </div>
         <div class="key-row">
-          <label class="sr" for="key">SpaceXAI key</label>
-          <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a key from console.x.ai">
+          <label class="sr" for="key">Gemini key</label>
+          <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a key from Google AI Studio">
           <button type="submit" class="primary">Save key</button>
         </div>
         <p class="key-links">
-          <a href="https://console.x.ai" target="_blank" rel="noreferrer">Get a key</a>
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">Get a key</a>
           <button type="button" class="text" id="forget" hidden>Forget key</button>
         </p>
       </form>
@@ -779,7 +779,7 @@ footer {
         <p class="empty-lead">Point the camera at a chart, a broker screen, or a board with prices. Tape reads only what is on the photo.</p>
         <ol class="steps">
           <li>Get the price scale in the frame when there is one.</li>
-          <li>Read the photo. A real read needs a SpaceXAI key.</li>
+          <li>Read the photo. A real read needs a Gemini key.</li>
           <li>Set the buy and the sell on the tickets. If the call is Wait, place nothing.</li>
         </ol>
       </div>
@@ -1263,9 +1263,9 @@ function clearPhoto() {
   markStep(1);
 }
 
-const KEY_NAME = "tape.xaiKey";
-const MODEL = "grok-4.7";
-const KEY_COPY = "The key stays in this browser on this PC. It is not saved inside the Tape file. Tape sends the photo to SpaceXAI only when you press Read.";
+const KEY_NAME = "tape.geminiKey";
+const MODEL = "gemini-3.8-flash";
+const KEY_COPY = "The key stays in this browser on this PC. It is not saved inside the Tape file. Tape sends the photo to Gemini only when you press Read.";
 
 const PROMPT = [
   "You read one photo of a live market and decide a single next action.",
@@ -1340,35 +1340,52 @@ function userContext() {
   ].join("\n");
 }
 
-function requestBody(image, text, full) {
-  const user = {
-    role: "user",
-    content: [
-      { type: "input_image", image_url: image, detail: "high" },
-      { type: "input_text", text: full ? text : PROMPT + "\n\n" + text }
-    ]
-  };
+function geminiSchema(node) {
+  if (!node || typeof node !== "object") return node;
+  if (Array.isArray(node)) return node.map(geminiSchema);
+  const out = {};
+  Object.keys(node).forEach((key) => {
+    if (key === "additionalProperties") return;
+    out[key] = geminiSchema(node[key]);
+  });
+  return out;
+}
+
+function imagePart(image) {
+  const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,([\s\S]+)$/.exec(String(image || ""));
+  let mime = match ? match[1].toLowerCase() : "image/jpeg";
+  if (mime === "image/jpg") mime = "image/jpeg";
+  const data = (match ? match[2] : String(image || "")).replace(/\s/g, "");
+  return { inline_data: { mime_type: mime, data: data } };
+}
+
+function requestBody(image, text, withSchema) {
   const body = {
-    model: MODEL,
-    input: full
-      ? [{ role: "system", content: [{ type: "input_text", text: PROMPT }] }, user]
-      : [user],
-    text: { format: { type: "json_schema", name: "market_read", strict: true, schema: SCHEMA } }
+    systemInstruction: { parts: [{ text: PROMPT }] },
+    contents: [{
+      role: "user",
+      parts: [
+        imagePart(image),
+        { text: withSchema ? text : "Return one JSON object and nothing else.\n\n" + PROMPT + "\n\n" + text }
+      ]
+    }]
   };
-  if (full) {
-    body.reasoning = { effort: "medium" };
-    body.store = false;
+  if (withSchema) {
+    body.generationConfig = {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema: geminiSchema(SCHEMA)
+    };
   }
   return body;
 }
 
 function outputText(data) {
-  if (data && data.output_text) return String(data.output_text);
   const parts = [];
-  (data && data.output || []).forEach((item) => {
-    if (!item || item.type !== "message") return;
-    (item.content || []).forEach((part) => {
-      if (part && part.type === "output_text" && part.text) parts.push(part.text);
+  ((data && data.candidates) || []).forEach((candidate) => {
+    const content = candidate && candidate.content;
+    ((content && content.parts) || []).forEach((part) => {
+      if (part && part.text && !part.thought) parts.push(part.text);
     });
   });
   return parts.join("");
@@ -1420,37 +1437,38 @@ function normalizeRead(raw) {
 }
 
 async function callModel(key, image, text) {
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent";
   let last = null;
-  for (const full of [true, false]) {
+  for (const withSchema of [true, false]) {
     let res;
     try {
-      res = await fetch("https://api.x.ai/v1/responses", {
+      res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-        body: JSON.stringify(requestBody(image, text, full))
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify(requestBody(image, text, withSchema))
       });
     } catch (err) {
-      throw new Error("Tape could not reach SpaceXAI. Check the connection and try again.");
+      throw new Error("Tape could not reach Gemini. Check the connection and try again.");
     }
     const body = await res.text();
     if (res.ok) return JSON.parse(body);
     last = { status: res.status, body: body };
-    if (res.status === 401 || /Incorrect API key|invalid api key/i.test(body)) {
-      throw new Error("That key was refused. Check it at console.x.ai.");
+    if (/API key not valid|API_KEY_INVALID|invalid api key/i.test(body)) {
+      throw new Error("That key was refused. Check it at aistudio.google.com/apikey.");
     }
-    if (res.status === 429) throw new Error("SpaceXAI is busy. Wait a moment and read the photo again.");
-    if (res.status < 400 || res.status >= 500) break;
+    if (res.status === 429) throw new Error("Gemini is busy. Wait a moment and read the photo again.");
+    if (res.status !== 400) break;
   }
   let hint = "";
   if (last && last.body) {
     try {
       const err = JSON.parse(last.body);
-      hint = err.error || err.message || "";
+      hint = (err.error && (err.error.message || err.error.status)) || err.message || "";
     } catch (err) {
       hint = last.body;
     }
   }
-  throw new Error(("SpaceXAI could not read that photo. " + String(hint)).slice(0, 240));
+  throw new Error(("Gemini could not read that photo. " + String(hint)).slice(0, 240));
 }
 
 function formatRead(read) {
@@ -1531,7 +1549,7 @@ async function readPhoto() {
   if (!state.jpeg || state.busy) return;
   if (state.statusReady && !state.configured) {
     showKeyForm();
-    showError("Add a SpaceXAI key first. Tape sends the photo to SpaceXAI to read it.");
+    showError("Add a Gemini key first. Tape sends the photo to Gemini to read it.");
     return;
   }
   state.busy = true;
@@ -1581,8 +1599,12 @@ function saveKey(event) {
     setStatus("Key removed.");
     return;
   }
-  if (key.length < 12 || key.length > 300 || /\s/.test(key)) {
-    showError("That key does not look usable. Paste the full key from console.x.ai.");
+  if (/^xai-/i.test(key)) {
+    showError("That is a Grok key. Paste a Gemini key from aistudio.google.com/apikey.");
+    return;
+  }
+  if (key.length < 20 || key.length > 300 || /\s/.test(key)) {
+    showError("That key does not look usable. Paste the full key from aistudio.google.com/apikey.");
     return;
   }
   try { localStorage.setItem(KEY_NAME, key); } catch (err) {
@@ -1764,6 +1786,7 @@ function bind() {
   });
 }
 
+try { localStorage.removeItem("tape.xaiKey"); } catch (err) {}
 bind();
 refreshStatus();
 syncHorizon();
