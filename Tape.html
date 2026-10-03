@@ -728,7 +728,6 @@ footer {
           <input id="upload" type="file" accept="image/*" hidden>
         </label>
         <button type="button" class="btn" id="live">Use camera</button>
-        <button type="button" class="btn" id="preview">Preview a read</button>
       </div>
 
       <form class="context" id="context">
@@ -841,8 +840,6 @@ footer {
 
 const $ = (id) => document.getElementById(id);
 
-const SCALE = { hi: 1.094, lo: 1.078, top: 78, bottom: 688, width: 1200, height: 760 };
-
 const TIMING = {
   now: "Act now",
   wait_for_price: "Set it and wait",
@@ -874,7 +871,6 @@ const state = {
   linesOn: true,
   linked: "",
   lastRead: null,
-  lastSample: false,
   configured: false,
   statusReady: false,
   busy: false,
@@ -895,66 +891,6 @@ const READ_PHASES = [
   "Reading the last price.",
   "Placing the buy, the sell, and the exit."
 ];
-
-const CLOSES = [
-  1.0912, 1.0904, 1.0908, 1.0896, 1.0899, 1.0884, 1.0888, 1.0872,
-  1.0866, 1.0874, 1.0858, 1.0849, 1.0855, 1.0838, 1.0844, 1.0832,
-  1.084, 1.0834, 1.0848, 1.0856, 1.0847, 1.0859, 1.0868, 1.0861,
-  1.087, 1.0864
-];
-
-function yPx(price) {
-  const t = (SCALE.hi - price) / (SCALE.hi - SCALE.lo);
-  return SCALE.top + t * (SCALE.bottom - SCALE.top);
-}
-
-function yPercent(price) {
-  return Math.round((yPx(price) / SCALE.height) * 1000) / 10;
-}
-
-function sampleRead() {
-  return {
-    readable: true,
-    instrument: "EURUSD",
-    timeframe: "15m",
-    bias: "buy",
-    timing: "wait_for_price",
-    confidence: 70,
-    headline: "Practice chart. Set a limit buy back at the earlier low.",
-    when_to_act: "Set the buy at 1.0830 and leave it. If price never comes back, do nothing. If you are filled, set the sell at 1.0910. Get out if a 15-minute close prints under 1.0805.",
-    last_price: "1.0864",
-    buy: {
-      price: "1.0830",
-      order: "limit",
-      why: "That is the recent low on this drawing, not the price trading now."
-    },
-    sell: {
-      price: "1.0910",
-      order: "limit",
-      why: "That is the area price fell from at the start of the drawing."
-    },
-    stop: {
-      price: "1.0805",
-      why: "A close under the low means the pullback idea failed."
-    },
-    invalid_if: "A 15-minute candle closes under 1.0805.",
-    what_i_see: [
-      "This is a drawn practice chart, not a broker screen.",
-      "The last printed price is 1.0864.",
-      "Price sold off from about 1.091 and is bouncing."
-    ],
-    risks: [
-      "A practice drawing has no live orders behind it.",
-      "The levels are chosen to show the screen, not a real market."
-    ],
-    chart_levels: [
-      { kind: "sell", price: "1.0910", y_percent: yPercent(1.091) },
-      { kind: "price", price: "1.0864", y_percent: yPercent(1.0864) },
-      { kind: "buy", price: "1.0830", y_percent: yPercent(1.083) },
-      { kind: "stop", price: "1.0805", y_percent: yPercent(1.0805) }
-    ]
-  };
-}
 
 function showError(message) {
   const el = $("error");
@@ -1151,76 +1087,6 @@ async function copyPrice(raw) {
   toast(copied ? "Copied " + value : "Could not copy " + value);
 }
 
-function drawPractice() {
-  const board = $("board");
-  board.width = SCALE.width;
-  board.height = SCALE.height;
-  const g = board.getContext("2d");
-  g.fillStyle = "#121612";
-  g.fillRect(0, 0, board.width, board.height);
-
-  g.strokeStyle = "rgba(244, 239, 228, 0.08)";
-  g.fillStyle = "#c8c2b4";
-  g.font = "16px Consolas, monospace";
-  g.lineWidth = 1;
-  for (let price = 1.08; price <= 1.094; price += 0.002) {
-    const y = yPx(Number(price.toFixed(4)));
-    g.beginPath();
-    g.moveTo(24, y);
-    g.lineTo(1068, y);
-    g.stroke();
-    g.fillText(price.toFixed(4), 1080, y + 5);
-  }
-
-  g.fillStyle = "#f4efe4";
-  g.font = "600 28px Georgia, serif";
-  g.fillText("EURUSD", 28, 42);
-  g.font = "16px Consolas, monospace";
-  g.fillStyle = "#b7b1a3";
-  g.fillText("15m    practice drawing", 168, 40);
-
-  const plotL = 36;
-  const plotR = 1048;
-  const slot = (plotR - plotL) / CLOSES.length;
-  let prev = CLOSES[0] + 0.0004;
-  CLOSES.forEach((close, i) => {
-    const open = prev;
-    const low = i === 15 ? 1.0828 : Math.min(open, close) - 0.00035;
-    const high = Math.max(open, close) + 0.00035;
-    const x = plotL + slot * i + slot / 2;
-    const up = close >= open;
-    g.strokeStyle = up ? "#c6eea4" : "#ffb4a4";
-    g.fillStyle = g.strokeStyle;
-    g.lineWidth = 1.5;
-    g.beginPath();
-    g.moveTo(x, yPx(high));
-    g.lineTo(x, yPx(low));
-    g.stroke();
-    const top = yPx(Math.max(open, close));
-    const bot = yPx(Math.min(open, close));
-    const body = Math.max(2, bot - top);
-    g.fillRect(x - slot * 0.28, top, slot * 0.56, body);
-    prev = close;
-  });
-
-  const lastY = yPx(1.0864);
-  g.strokeStyle = "rgba(244, 239, 228, 0.85)";
-  g.setLineDash([5, 5]);
-  g.beginPath();
-  g.moveTo(36, lastY);
-  g.lineTo(1048, lastY);
-  g.stroke();
-  g.setLineDash([]);
-
-  showBoard(true);
-  rememberClean();
-  $("read").disabled = false;
-  $("retake").hidden = false;
-  stopCamera();
-  syncLiveButton();
-  markStep(2);
-}
-
 function paintSource(source) {
   const maxSide = 1600;
   const scale = Math.min(1, maxSide / Math.max(source.width, source.height));
@@ -1338,18 +1204,11 @@ function renderRead(read, meta) {
   fillList("risks", "riskLabel", read.risks);
 
   const flag = $("flag");
-  if (meta.sample) {
-    flag.hidden = false;
-    flag.textContent = "Practice read. This chart was drawn in the page so you can see the screen. It is not a call on a real market.";
-    $("by").textContent = "Sample layout. Not a model read.";
-  } else {
-    flag.hidden = true;
-    flag.textContent = "";
-    $("by").textContent = meta.model ? "Read by " + meta.model + "." : "";
-  }
+  flag.hidden = true;
+  flag.textContent = "";
+  $("by").textContent = meta.model ? "Read by " + meta.model + "." : "";
 
   state.lastRead = read;
-  state.lastSample = Boolean(meta.sample);
   state.levels = Array.isArray(read.chart_levels) ? read.chart_levels : [];
   state.linesOn = state.levels.length > 0;
   state.linked = "";
@@ -1594,10 +1453,9 @@ async function callModel(key, image, text) {
   throw new Error(("SpaceXAI could not read that photo. " + String(hint)).slice(0, 240));
 }
 
-function formatRead(read, sample) {
+function formatRead(read) {
   const line = (label, order) => label + ": " + (order && order.price ? order.price : "none");
   const lines = ["Tape"];
-  if (sample) lines.push("Practice read. Not a call on a real market.");
   lines.push([read.instrument || "Market in the photo", read.timeframe, read.last_price ? "Last " + read.last_price : ""].filter(Boolean).join("  ·  "));
   lines.push("");
   lines.push(read.bias === "buy" ? "Buy" : read.bias === "sell" ? "Sell" : "Wait");
@@ -1632,7 +1490,7 @@ function formatRead(read, sample) {
 
 function saveAsFile() {
   if (!state.lastRead) return;
-  const text = formatRead(state.lastRead, state.lastSample);
+  const text = formatRead(state.lastRead);
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const link = document.createElement("a");
   const name = (state.lastRead.instrument || "market").replace(/[^\w.-]+/g, "-");
@@ -1819,12 +1677,6 @@ function bind() {
     startCamera();
   });
   $("shutter").addEventListener("click", snap);
-  $("preview").addEventListener("click", () => {
-    drawPractice();
-    renderRead(sampleRead(), { sample: true });
-    setStatus("");
-    showError("");
-  });
   $("read").addEventListener("click", readPhoto);
   $("retake").addEventListener("click", clearPhoto);
   $("keyForm").addEventListener("submit", saveKey);
@@ -1916,11 +1768,6 @@ bind();
 refreshStatus();
 syncHorizon();
 markStep(1);
-
-if (new URLSearchParams(location.search).get("sample") === "1") {
-  drawPractice();
-  renderRead(sampleRead(), { sample: true });
-}
 
 </script>
 </body>
