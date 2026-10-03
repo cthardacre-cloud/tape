@@ -48,6 +48,53 @@ function scrub(text, key) {
   return String(text || "").split(key).join("[key]").slice(0, 240);
 }
 
+const WINDOW_MS = 10 * 60 * 1000;
+const IP_LIMIT = 6;
+const GLOBAL_LIMIT = 40;
+const hits = new Map();
+
+function headerValue(value) {
+  if (Array.isArray(value)) return String(value[0] || "").trim();
+  return String(value || "").trim();
+}
+
+function clientIp(req) {
+  const headers = (req && req.headers) || {};
+  const real = headerValue(headers["x-real-ip"]);
+  if (real) return real;
+  const forwarded = headerValue(headers["x-vercel-forwarded-for"]);
+  if (forwarded) return forwarded.split(",")[0].trim();
+  return "unknown";
+}
+
+function reserveRead(ip, now) {
+  const start = now - (now % WINDOW_MS);
+  const ipKey = "ip:" + ip + ":" + start;
+  const allKey = "all:" + start;
+  if (hits.size > 400) {
+    for (const key of hits.keys()) {
+      if (!key.endsWith(":" + start)) hits.delete(key);
+    }
+  }
+  const ipCount = hits.get(ipKey) || 0;
+  const allCount = hits.get(allKey) || 0;
+  const retryAfter = Math.max(1, Math.ceil((start + WINDOW_MS - now) / 1000));
+  if (ipCount >= IP_LIMIT) return { ok: false, scope: "ip", retryAfter: retryAfter };
+  if (allCount >= GLOBAL_LIMIT) return { ok: false, scope: "global", retryAfter: retryAfter };
+  hits.set(ipKey, ipCount + 1);
+  hits.set(allKey, allCount + 1);
+  return { ok: true, retryAfter: retryAfter };
+}
+
+function tooMany(res, decision) {
+  const error = decision.scope === "global"
+    ? "Tape is busy. Wait about 10 minutes, then try the photo again."
+    : "Too many reads from this network. Wait about 10 minutes, then try the photo again.";
+  res.setHeader("Retry-After", String(decision.retryAfter));
+  res.setHeader("Cache-Control", "no-store");
+  res.status(429).json({ error: error });
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Use POST." });
@@ -70,6 +117,11 @@ module.exports = async function handler(req, res) {
   }
   if (typeof text !== "string" || text.length > 2000) {
     res.status(400).json({ error: "The note is too long." });
+    return;
+  }
+  const decision = reserveRead(clientIp(req), Date.now());
+  if (!decision.ok) {
+    tooMany(res, decision);
     return;
   }
   let lastStatus = 0;

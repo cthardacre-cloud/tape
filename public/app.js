@@ -617,7 +617,11 @@ async function callHosted(image, text) {
   const body = await res.text();
   let data = {};
   try { data = JSON.parse(body); } catch (err) { data = {}; }
-  if (!res.ok) throw new Error(data.error || "Gemini could not read that photo.");
+  const message = data && typeof data.error === "string" ? data.error : "";
+  if (res.status === 429) {
+    throw new Error(message || "Too many reads from this network. Wait about 10 minutes, then try the photo again.");
+  }
+  if (!res.ok) throw new Error(message || "Gemini could not read that photo.");
   return data;
 }
 
