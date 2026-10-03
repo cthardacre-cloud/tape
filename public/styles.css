@@ -368,6 +368,7 @@ h1 {
   background: linear-gradient(180deg, rgba(244, 239, 228, 0.03), transparent 90px), var(--bg-2);
   padding: 22px 20px 18px;
   min-height: 420px;
+  min-width: 0;
 }
 
 .call h2, .call h3 { font-family: Fraunces, Georgia, serif; font-weight: 560; }
@@ -433,18 +434,20 @@ h1 {
   font-family: "IBM Plex Mono", Consolas, monospace;
   font-size: 12px;
   letter-spacing: 0.04em;
+  overflow-wrap: break-word;
 }
 
 .bias {
   margin: 8px 0 0;
   font-family: Fraunces, Georgia, serif;
   font-weight: 640;
-  font-size: clamp(84px, 16vw, 132px);
+  font-size: clamp(56px, 8vw, 88px);
   letter-spacing: -0.05em;
   line-height: 0.8;
 }
 
 #result.is-in .bias,
+#result.is-in .order-line,
 #result.is-in .ticket {
   animation: rise 0.45s ease both;
 }
@@ -461,8 +464,16 @@ h1 {
 .bias.sell { color: var(--sell); }
 .bias.wait { color: var(--wait); }
 
+.order-line {
+  margin: 18px 0 0;
+  max-width: 38ch;
+  font-size: 18px;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+
 .headline {
-  margin: 14px 0 18px;
+  margin: 12px 0 18px;
   font-size: 20px;
   max-width: 36ch;
 }
@@ -470,10 +481,12 @@ h1 {
 .tickets {
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
 .ticket {
   margin: 0;
+  min-width: 0;
   padding: 12px 14px 14px;
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -638,7 +651,7 @@ footer {
   transform: translateX(-50%) translateY(0);
 }
 
-@container (min-width: 680px) {
+@container (min-width: 720px) {
   .tickets { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .ticket .price { font-size: 26px; }
 }
@@ -668,6 +681,7 @@ footer {
   .view.is-reading::after { animation: none; top: 50%; }
   html { scroll-behavior: auto; }
   #result.is-in .bias,
+  #result.is-in .order-line,
   #result.is-in .ticket,
   .view.is-live .shutter span { animation: none; }
   .ticket:hover,

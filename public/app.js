@@ -306,6 +306,18 @@ function priceText(value) {
   return text || "—";
 }
 
+function orderLine(read) {
+  const bias = ["buy", "sell", "wait"].includes(read.bias) ? read.bias : "wait";
+  const buy = priceText(read.buy && read.buy.price);
+  const sell = priceText(read.sell && read.sell.price);
+  const out = priceText(read.stop && read.stop.price);
+  const place = (label, price) => price === "—"
+    ? "The " + label + " price is not readable on the photo."
+    : "Set the " + label + " at " + price + ".";
+  if (bias === "wait") return "Wait. Place no buy and no sell.";
+  return (bias === "sell" ? "Sell." : "Buy.") + " " + place("buy", buy) + " " + place("sell", sell) + " " + place("out", out);
+}
+
 function renderKicker(read) {
   const kicker = $("kicker");
   kicker.replaceChildren();
@@ -338,6 +350,7 @@ function renderRead(read, meta) {
   const biasEl = $("bias");
   biasEl.className = "bias " + bias;
   biasEl.textContent = bias === "buy" ? "Buy" : bias === "sell" ? "Sell" : "Wait";
+  $("orderLine").textContent = orderLine(read);
 
   renderKicker(read);
 
@@ -358,7 +371,7 @@ function renderRead(read, meta) {
   setTicket("sell", read.sell, bias === "sell");
   const stop = read.stop || {};
   setPriceButton("stopPrice", stop.price);
-  $("stopOrder").textContent = stop.price ? "Close if hit" : "No stop";
+  $("stopOrder").textContent = stop.price ? "Get out if this price is hit" : "No out price on the photo";
   $("stopWhy").textContent = stop.why || "";
   $("stopTicket").className = "ticket" + (bias !== "wait" && stop.price ? " hot stop" : "");
 
@@ -398,7 +411,7 @@ function setPriceButton(id, raw) {
 function setTicket(side, order, hot) {
   const data = order || {};
   setPriceButton(side + "Price", data.price);
-  $(side + "Order").textContent = data.price ? (ORDERS[data.order] || "Level") : "No order";
+  $(side + "Order").textContent = data.price ? (ORDERS[data.order] || "Level") : "No price on the photo";
   $(side + "Why").textContent = data.why || "";
   $(side + "Ticket").className = "ticket" + (hot && data.price ? " hot " + side : "");
 }
@@ -437,11 +450,13 @@ const PROMPT = [
   "- Copy prices from the image. If a digit is unclear, leave that price as an empty string. Never guess a digit. Never fill in a price from memory of the real market.",
   "- If you cannot see a market with prices, set readable to false, bias to wait, timing to stay_out, orders to none, and prices to empty strings.",
   "- If the image is a drawing, a sample, or not a live screen, say so in the headline, set confidence to 20 or lower, and use bias wait unless every price you would quote is printed on the drawing.",
-  "- bias buy means get long. The buy price is where to set the buy. The sell price is where to set the sell to take profit. The stop price is where that long is wrong.",
-  "- bias sell means get short, or sell an existing position when the note says they are already long. The sell price is where to set the sell. The buy price is where to set the buy to cover or take profit. The stop price is where that idea is wrong.",
-  "- bias wait means do not place a new order. Set both order fields to none and leave order prices empty unless a price is printed and you are only naming the last price.",
+  "- If the photo shows a market and at least one printed price, bias must be buy or sell. Wait is only for a photo with no readable market.",
+  "- bias buy means get long. buy.price is where to set the buy. sell.price is where to set the sell. stop.price is where to set the out if that long is wrong.",
+  "- bias sell means get short, or sell an existing position when the note says they are already long. sell.price is where to set the sell. buy.price is where to set the buy to cover. stop.price is where to set the out if that idea is wrong.",
+  "- On a buy or a sell, fill buy.price, sell.price, and stop.price from digits printed on the photo. If a price is not printed, leave that field as an empty string. Never invent a digit.",
+  "- bias wait means place nothing. Leave order prices empty.",
   "- timing now means a market order at the visible price. timing wait_for_price means place a resting limit and wait. timing after_close means wait for the current bar to close, then act only if that close confirms. timing stay_out means place nothing.",
-  "- when_to_act is one or two short sentences in plain speech. Name the prices. Say what to do if price never reaches the order.",
+  "- when_to_act says Buy or Sell first, then where to set the buy, where to set the sell, and where to set the out. Use only prices copied from the photo. Say what to do if price never reaches the order.",
   "- headline is one sentence under 18 words. No exclamation marks. No promises of profit.",
   "- confidence scores how legible the photo is and how obvious the level is, from 0 to 100. It is not a probability of making money. Blur, crop, or glare stays at 40 or below.",
   "- last_price is the last traded price printed on the photo, or an empty string.",
@@ -462,15 +477,15 @@ const SCHEMA = {
     readable: { type: "boolean", description: "True only when the photo shows a market and at least one price or a clear chart scale." },
     instrument: { type: "string", description: "Symbol or market name printed in the photo. Empty string if none is printed." },
     timeframe: { type: "string", description: "Chart timeframe printed in the photo, such as 15m or 1D. Empty string if none is printed." },
-    bias: { type: "string", enum: ["buy", "sell", "wait"], description: "buy means set a long. sell means set a short or exit. wait means place no new order." },
+    bias: { type: "string", enum: ["buy", "sell", "wait"], description: "buy or sell when the photo shows a market. wait only when no market is readable." },
     timing: { type: "string", enum: ["now", "wait_for_price", "after_close", "stay_out"], description: "now: market order. wait_for_price: resting limit. after_close: wait for the bar to close. stay_out: place nothing." },
     confidence: { type: "integer", minimum: 0, maximum: 100, description: "How legible the photo is, not a chance of profit. Blurry or cropped photos stay at 40 or below." },
     headline: { type: "string", description: "One sentence under 18 words. No exclamation marks and no profit promises." },
-    when_to_act: { type: "string", description: "One or two plain sentences naming the prices and what to do if price never gets there." },
+    when_to_act: { type: "string", description: "Say Buy or Sell, then where to set the buy, the sell, and the out. Use only prices copied from the photo." },
     last_price: { type: "string", description: "Last traded price printed in the photo. Empty string if you cannot read it." },
-    buy: { type: "object", additionalProperties: false, required: ["price", "order", "why"], properties: { price: { type: "string" }, order: { type: "string", enum: ["market", "limit", "stop", "none"] }, why: { type: "string" } } },
-    sell: { type: "object", additionalProperties: false, required: ["price", "order", "why"], properties: { price: { type: "string" }, order: { type: "string", enum: ["market", "limit", "stop", "none"] }, why: { type: "string" } } },
-    stop: { type: "object", additionalProperties: false, required: ["price", "why"], properties: { price: { type: "string" }, why: { type: "string" } } },
+    buy: { type: "object", additionalProperties: false, required: ["price", "order", "why"], properties: { price: { type: "string", description: "Where to set the buy. Digits copied from the photo, or an empty string." }, order: { type: "string", enum: ["market", "limit", "stop", "none"] }, why: { type: "string" } } },
+    sell: { type: "object", additionalProperties: false, required: ["price", "order", "why"], properties: { price: { type: "string", description: "Where to set the sell. Digits copied from the photo, or an empty string." }, order: { type: "string", enum: ["market", "limit", "stop", "none"] }, why: { type: "string" } } },
+    stop: { type: "object", additionalProperties: false, required: ["price", "why"], properties: { price: { type: "string", description: "Where to set the out. Digits copied from the photo, or an empty string." }, why: { type: "string" } } },
     invalid_if: { type: "string" },
     what_i_see: { type: "array", maxItems: 4, items: { type: "string" } },
     risks: { type: "array", maxItems: 3, items: { type: "string" } },
@@ -675,14 +690,14 @@ function formatRead(read) {
   const lines = ["Tape"];
   lines.push([read.instrument || "Market in the photo", read.timeframe, read.last_price ? "Last " + read.last_price : ""].filter(Boolean).join("  ·  "));
   lines.push("");
-  lines.push(read.bias === "buy" ? "Buy" : read.bias === "sell" ? "Sell" : "Wait");
+  lines.push(orderLine(read));
   lines.push(read.headline || "");
   lines.push("");
-  lines.push(line("Set buy", read.buy));
+  lines.push(line("Where to set the buy", read.buy));
   if (read.buy && read.buy.why) lines.push(read.buy.why);
-  lines.push(line("Set sell", read.sell));
+  lines.push(line("Where to set the sell", read.sell));
   if (read.sell && read.sell.why) lines.push(read.sell.why);
-  lines.push(line("Get out", read.stop));
+  lines.push(line("Where to set the out", read.stop));
   if (read.stop && read.stop.why) lines.push(read.stop.why);
   lines.push("");
   lines.push("When");

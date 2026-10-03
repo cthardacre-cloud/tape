@@ -17,7 +17,7 @@
       <p class="eyebrow">Live market photo</p>
       <h1>Tape</h1>
     </div>
-    <p class="lede">Take a photo of the market. Tape tells you when to buy or sell, and the prices to set.</p>
+    <p class="lede">Take a photo of the market. Tape tells you to buy or sell, and where to set the buy, the sell, and the out.</p>
   </header>
 
   <main class="desk">
@@ -100,7 +100,7 @@
         <ol class="steps">
           <li>Get the price scale in the frame when there is one.</li>
           <li>Read the photo.</li>
-          <li>Set the buy and the sell on the tickets. If the call is Wait, place nothing.</li>
+          <li>Read Buy or Sell, then where to set the buy, the sell, and the out. If the call is Wait, place nothing.</li>
         </ol>
       </div>
 
@@ -111,22 +111,23 @@
           <p class="clarity" id="clarity"></p>
         </div>
         <h2 class="bias" id="bias"></h2>
+        <p class="order-line" id="orderLine"></p>
         <p class="headline" id="headline"></p>
         <div class="tickets">
           <article class="ticket" id="buyTicket" data-kind="buy">
-            <span>Set buy</span>
+            <span>Buy</span>
             <button type="button" class="price" id="buyPrice"></button>
             <em id="buyOrder"></em>
             <p id="buyWhy"></p>
           </article>
           <article class="ticket" id="sellTicket" data-kind="sell">
-            <span>Set sell</span>
+            <span>Sell</span>
             <button type="button" class="price" id="sellPrice"></button>
             <em id="sellOrder"></em>
             <p id="sellWhy"></p>
           </article>
           <article class="ticket" id="stopTicket" data-kind="stop">
-            <span>Get out</span>
+            <span>Out</span>
             <button type="button" class="price" id="stopPrice"></button>
             <em id="stopOrder"></em>
             <p id="stopWhy"></p>
